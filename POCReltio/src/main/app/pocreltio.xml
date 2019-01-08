@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata"
+	xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:reltio="http://www.mulesoft.org/schema/mule/reltio" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/reltio http://www.mulesoft.org/schema/mule/reltio/current/mule-reltio.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd">
+	<http:listener-config name="HTTP_Listener_Configuration"
+		host="localhost" port="8989" doc:name="HTTP Listener Configuration" />
+	<reltio:config name="Reltio__Configuration_AAP" tokenUrl="https://auth.reltio.com/oauth/token"
+		username="data.loader" password="reltio" authorizationString="cmVsdGlvX3VpOm1ha2l0YQ=="
+		baseUrl="https://dev.reltio.com/reltio/api/" tenantId="tQududuFBuD0zFT"
+		doc:name="Reltio: Configuration" />
+	<flow name="pocreltioFlow">
+		<http:listener config-ref="HTTP_Listener_Configuration"
+			path="/testReltio" doc:name="HTTP" />
+		<parse-template
+			location="entity_customer_cq-edw.json"
+			doc:name="Parse Template" />
+		<logger message="Input Payload is #[payload]" level="INFO"
+			doc:name="Logger" />
+		<!-- <json:json-to-object-transformer returnClass="java.util.ArrayList" 
+			doc:name="JSON to Object"/> -->
+		<dw:transform-message doc:name="Transform Message" metadata:id="2fd365cf-fbf6-4af5-b220-89364ca03941">
+			<dw:input-payload doc:sample="sample_data\map.dwl"
+				mimeType="application/json" />
+			<dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+payload ]]></dw:set-payload>
+ </dw:transform-message>
+			<reltio:create-entities config-ref="Reltio__Configuration_AAP"
+				doc:name="Reltio" entityType="configuration/entityTypes/Organization" >
+            <reltio:entity-data ref="#[payload]"/>
+
+			</reltio:create-entities>
+        <json:object-to-json-transformer doc:name="Object to JSON"/>
+			<!-- <json:object-to-json-transformer
+				doc:name="Object to JSON" /> -->
+      <!--   <dw:transform-message doc:name="Transform Message">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+
+payload]]></dw:set-payload>
+        </dw:transform-message> -->
+        <async doc:name="Async">
+            <flow-ref name="retry-flow" doc:name="Flow Reference"/>
+        </async>
+
+			<logger message="Reltio Output #[payload]" level="INFO"
+				doc:name="Logger" />
+	</flow>
+    <sub-flow name="retry-flow">
+        <logger message="In retry flow" level="INFO" doc:name="Logger"/>
+        <json:json-to-object-transformer returnClass="java.util.ArrayList" doc:name="JSON to Object"/>
+        <logger message="Retry payload #[payload]" level="INFO" doc:name="Logger"/>
+    </sub-flow>
+</mule>
